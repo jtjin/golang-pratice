@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -15,26 +16,29 @@ var (
 	videoController controller.VideoController = controller.New(videoService)
 )
 
+func setupLogOutput() {
+	f, _ := os.Create("gin.log")
+	gin.DefaultWriter = io.MultiWriter(f, os.Stdout)
+}
+
 func main() {
 
-	// Logging to a file.
-	f, _ := os.Create("gin.log")
-	// gin.DefaultWriter = io.MultiWriter(f)
+	setupLogOutput()
 
-	// Logging to a file AND console at the same time.
-	gin.DefaultWriter = io.MultiWriter(f, os.Stdout)
-
-	// server := gin.Default()
 	server := gin.New()
-	server.Use(gin.Recovery())
-	server.Use(middlewares.Logger())
-	server.Use(middlewares.BasicAuth())
+	server.Use(gin.Recovery(), middlewares.Logger(),
+		middlewares.BasicAuth())
 
 	server.GET("/videos", func(ctx *gin.Context) {
-		ctx.JSON(200, videoController.FindAll())
+		ctx.JSON(http.StatusOK, videoController.FindAll())
 	})
 	server.POST("/videos", func(ctx *gin.Context) {
-		ctx.JSON(200, videoController.Save(ctx))
+		video, err := videoController.Save(ctx)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			ctx.JSON(http.StatusOK, video)
+		}
 	})
 	server.Run(":8080")
 }
